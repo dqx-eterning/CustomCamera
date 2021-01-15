@@ -15,7 +15,6 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
 import android.os.Build;
@@ -23,12 +22,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Size;
-import android.util.SparseIntArray;
-import android.view.Surface;
 import android.view.SurfaceHolder;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
-import com.dangqx.customcamera.callback.CameraDeviceStateCallback;
+import com.dangqx.customcamera.method.setPreviewAndCapture;
 import com.dangqx.customcamera.util.ImageSaver;
 import com.dangqx.customcamera.util.Utils;
 import com.dangqx.customcamera.view.ResizeAbleSurfaceView;
@@ -37,15 +36,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();//旋转方向集合
-    static {
-        ORIENTATIONS.append(Surface.ROTATION_0, 90);
-        ORIENTATIONS.append(Surface.ROTATION_90, 0);
-        ORIENTATIONS.append(Surface.ROTATION_180, 270);
-        ORIENTATIONS.append(Surface.ROTATION_270, 180);
-    }
+    private setPreviewAndCapture setPreviewAndCapture;
 
     private int currentCameraId = CameraCharacteristics.LENS_FACING_FRONT;//手机后面的摄像头
 
@@ -59,9 +52,6 @@ public class MainActivity extends AppCompatActivity {
     private CameraManager cameraManager;
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSession;
-    private CaptureRequest.Builder previewBuilder;
-    private CaptureRequest.Builder captureBuilder;
-    private CaptureRequest.Builder recordBuilder;
 
     private HandlerThread handlerThread;
     private Handler handler;
@@ -98,6 +88,18 @@ public class MainActivity extends AppCompatActivity {
         } else {
             initView();
         }
+
+        //为按钮绑定点击事件
+        Button picture = findViewById(R.id.btnTakePhoto);
+        Button change = findViewById(R.id.btnSwitch);
+        Button record = findViewById(R.id.record);
+        Button stopRecord = findViewById(R.id.stop);
+        Button zoom = findViewById(R.id.btn_zoom);
+        picture.setOnClickListener(this);
+        change.setOnClickListener(this);
+        record.setOnClickListener(this);
+        stopRecord.setOnClickListener(this);
+        zoom.setOnClickListener(this);
     }
 
     /**
@@ -134,13 +136,23 @@ public class MainActivity extends AppCompatActivity {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void initView(){
         surfaceView = findViewById(R.id.surfaceView);
-        surfaceView.resize(1080,1080);
+        //surfaceView.resize(1080,1080);
         surfaceHolder = surfaceView.getHolder();
         surfaceHolder.addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(@NonNull SurfaceHolder holder) {
                 //打开相机同时开启预览
                 setAndOpenCamera();
+                int height = surfaceView.getHeight();
+                int width = surfaceView.getWidth();
+                if (height > width) {
+                    float justH = width * 4.f / 3;
+                    //设置View在水平方向的缩放比例,保证宽高比为3:4
+                    surfaceView.setScaleX(height / justH);
+                } else {
+                    float justW = height * 4.f / 3;
+                    surfaceView.setScaleY(width / justW);
+                }
             }
 
             @Override
@@ -189,12 +201,39 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             //打开摄像头
-            cameraManager.openCamera(String.valueOf(currentCameraId),new CameraDeviceStateCallback(MainActivity.this,
-                    surfaceHolder, imageReader,handler),null);
+            cameraManager.openCamera(String.valueOf(currentCameraId),stateCallback,null);
         }catch(CameraAccessException e){
             e.printStackTrace();
         }
     }
+
+    /**
+     * 打开相机后的状态回调，获取CameraDevice对象
+     */
+    private CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
+        @Override
+        public void onOpened(@NonNull CameraDevice camera) {
+            cameraDevice = camera;
+            //打开相机后开启预览
+            setPreviewAndCapture = new setPreviewAndCapture(cameraDevice,surfaceHolder,imageReader,handler);
+            setPreviewAndCapture.startPreview();
+
+        }
+
+        @Override
+        public void onDisconnected(@NonNull CameraDevice camera) {
+            camera.close();
+            cameraDevice = null;
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice camera, int error) {
+            camera.close();
+            cameraDevice = null;
+            finish();
+        }
+    };
+
 
     /**
      * 关闭相机
@@ -214,6 +253,19 @@ public class MainActivity extends AppCompatActivity {
         if (imageReader != null) {
             imageReader.close();
             imageReader = null;
+        }
+    }
+
+    /**
+     * 点击不同按钮的事件
+     * @param v
+     */
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()){
+            case R.id.btnTakePhoto:
+
+                break;
         }
     }
 }
