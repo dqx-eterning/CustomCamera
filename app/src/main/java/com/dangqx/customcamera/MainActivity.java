@@ -10,24 +10,28 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.util.Log;
 import android.util.Size;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.dangqx.customcamera.method.setPreviewAndCapture;
+import com.dangqx.customcamera.method.SetPreviewAndCapture;
+import com.dangqx.customcamera.method.VideoRecordUtils;
 import com.dangqx.customcamera.util.ImageSaver;
 import com.dangqx.customcamera.util.Utils;
 import com.dangqx.customcamera.view.ResizeAbleSurfaceView;
@@ -38,7 +42,8 @@ import java.util.List;
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private setPreviewAndCapture setPreviewAndCapture;
+    private SetPreviewAndCapture setPreviewAndCapture;
+    private VideoRecordUtils videoRecordUtils;
 
     private int currentCameraId = CameraCharacteristics.LENS_FACING_FRONT;//手机后面的摄像头
 
@@ -47,16 +52,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Size previewSize;//图片尺寸
     private Size mWinSize;//获取屏幕的尺寸
     private ImageReader imageReader;//接受图片数据
-    private float mRate = 1;//缩放倍数，默认为1
 
     private CameraManager cameraManager;
     private CameraDevice cameraDevice;
-    private CameraCaptureSession cameraCaptureSession;
 
     private HandlerThread handlerThread;
     private Handler handler;
 
-    //private VideoRecorderUtils videoRecorderUtils;
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,6 +148,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 int height = surfaceView.getHeight();
                 int width = surfaceView.getWidth();
                 if (height > width) {
+                    //正常情况，竖屏
                     float justH = width * 4.f / 3;
                     //设置View在水平方向的缩放比例,保证宽高比为3:4
                     surfaceView.setScaleX(height / justH);
@@ -181,6 +184,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         try{
             //根据摄像头id获取摄像头属性类
             cameraCharacteristics = cameraManager.getCameraCharacteristics(String.valueOf(currentCameraId));
+            //获取支持的缩放
+            float maxZoom = (cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM))*10;
+            Log.d("最大缩放倍数", "switchCamera: "+maxZoom);
             //获取该摄像头支持输出的图片尺寸
             StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             //根据屏幕尺寸即摄像头输出尺寸计算图片尺寸
@@ -192,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 @Override
                 public void onImageAvailable(ImageReader reader) {
                     //发送数据进子线程处理
-                    handler.post(new ImageSaver(reader.acquireNextImage()));
+                    handler.post(new ImageSaver(reader.acquireNextImage(),MainActivity.this));
                 }
             },handler);
             //打开相机，先检查权限
@@ -214,9 +220,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
             cameraDevice = camera;
-            //打开相机后开启预览
-            setPreviewAndCapture = new setPreviewAndCapture(cameraDevice,surfaceHolder,imageReader,handler);
+            //打开相机后开启预览,主要是将CameraDevice对象传递进工具类
+            setPreviewAndCapture = new SetPreviewAndCapture(cameraDevice,surfaceHolder,
+                    imageReader,handler,MainActivity.this,previewSize);
             setPreviewAndCapture.startPreview();
+            //初始化录像的工具类
+            videoRecordUtils = new VideoRecordUtils();
+            videoRecordUtils.create(surfaceView,cameraDevice,VideoRecordUtils.WH_720X480);
 
         }
 
@@ -234,16 +244,41 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     };
 
+    /**
+     * 切换前后摄像头的方法
+     */
+    private void switchCamera(){
+        try{
+            for (String cameraId : cameraManager.getCameraIdList()){
+                CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
+                //判断当前摄像头为后置摄像头，且存在前置摄像头
+                if (currentCameraId == CameraCharacteristics.LENS_FACING_FRONT &&
+                        cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK){
+                    //后置转前置
+                    currentCameraId = CameraCharacteristics.LENS_FACING_BACK;
+                    //重新打开相机
+                    cameraDevice.close();
+                    setAndOpenCamera();
+                    break;
+                }else if (currentCameraId == CameraCharacteristics.LENS_FACING_BACK &&
+                        cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT){
+                    //前置转后置
+                    currentCameraId = CameraCharacteristics.LENS_FACING_FRONT;
+                    cameraDevice.close();
+                    setAndOpenCamera();
+                    break;
+                }
+            }
+        }catch(CameraAccessException e){
+            e.printStackTrace();
+        }
+    }
 
     /**
      * 关闭相机
      */
     private void closeCamera() {
-        //关闭捕捉会话
-        if (cameraCaptureSession != null) {
-            cameraCaptureSession.close();
-            cameraCaptureSession = null;
-        }
+
         //关闭相机
         if (cameraDevice != null) {
             cameraDevice.close();
@@ -260,11 +295,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * 点击不同按钮的事件
      * @param v
      */
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void onClick(View v) {
         switch (v.getId()){
             case R.id.btnTakePhoto:
-
+                setPreviewAndCapture.takePhoto();
+                break;
+            case R.id.btnSwitch:
+                switchCamera();
+                break;
+            case R.id.record:
+                videoRecordUtils.startRecord(MainActivity.this,handler);
+                break;
+            case R.id.stop:
+                videoRecordUtils.stopRecord();
+                setPreviewAndCapture.startPreview();
+            case R.id.btn_zoom:
+                setPreviewAndCapture.setZoom();
+                break;
+            default:
                 break;
         }
     }
