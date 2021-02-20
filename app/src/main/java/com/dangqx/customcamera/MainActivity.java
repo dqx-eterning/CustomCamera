@@ -145,6 +145,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             public void surfaceCreated(@NonNull SurfaceHolder holder) {
                 //打开相机同时开启预览
                 setAndOpenCamera();
+                //解决预览拉升
                 int height = surfaceView.getHeight();
                 int width = surfaceView.getWidth();
                 if (height > width) {
@@ -189,10 +190,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             Log.d("最大缩放倍数", "switchCamera: "+maxZoom);
             //获取该摄像头支持输出的图片尺寸
             StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            //根据屏幕尺寸即摄像头输出尺寸计算图片尺寸
+            //根据屏幕尺寸即摄像头输出尺寸计算图片尺寸，或者直接选取最大的图片尺寸进行输出
             previewSize = Utils.fitPhotoSize(map,mWinSize);
             //初始化imageReader
-            imageReader = ImageReader.newInstance(previewSize.getWidth(),previewSize.getHeight(), ImageFormat.JPEG,2);
+            imageReader = ImageReader.newInstance(previewSize.getWidth(), previewSize.getHeight(), ImageFormat.JPEG,2);
             //设置回调处理接受图片数据
             imageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
                 @Override
@@ -202,12 +203,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
             },handler);
             //打开相机，先检查权限
-            if (ActivityCompat.checkSelfPermission(this,Manifest.permission.CAMERA) !=
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) !=
                     PackageManager.PERMISSION_GRANTED){
                 return;
             }
             //打开摄像头
-            cameraManager.openCamera(String.valueOf(currentCameraId),stateCallback,null);
+            cameraManager.openCamera(String.valueOf(currentCameraId), stateCallback,null);
         }catch(CameraAccessException e){
             e.printStackTrace();
         }
@@ -220,13 +221,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
             cameraDevice = camera;
-            //打开相机后开启预览,主要是将CameraDevice对象传递进工具类
-            setPreviewAndCapture = new SetPreviewAndCapture(cameraDevice,surfaceHolder,
-                    imageReader,handler,MainActivity.this,previewSize);
+            //打开相机后开启预览，以及拍照的工具类,主要是将CameraDevice对象传递进工具类
+            setPreviewAndCapture = new SetPreviewAndCapture(cameraDevice, surfaceHolder,
+                    imageReader, handler,MainActivity.this, previewSize);
             setPreviewAndCapture.startPreview();
             //初始化录像的工具类
             videoRecordUtils = new VideoRecordUtils();
-            videoRecordUtils.create(surfaceView,cameraDevice,VideoRecordUtils.WH_720X480);
+            videoRecordUtils.create(surfaceView, cameraDevice, VideoRecordUtils.WH_720X480);
 
         }
 

@@ -7,7 +7,7 @@ import android.view.SurfaceView;
 /**
  * Created by dang on 2021-01-11.
  * Time will tell.
- *
+ * 自定义一个surfaceView继承surfaceView
  * @description
  */
 public class ResizeAbleSurfaceView extends SurfaceView {

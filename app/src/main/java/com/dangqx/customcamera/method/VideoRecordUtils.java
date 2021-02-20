@@ -131,6 +131,7 @@ public class VideoRecordUtils {
             }
         }
         Log.d("1111", "startRecord: "+file);
+        //设置视频录制文件的保存路径
         mediaRecorder.setOutputFile(file);
         try{
             //初始化mediaRecord，然后开启

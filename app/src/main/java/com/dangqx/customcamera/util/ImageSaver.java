@@ -83,7 +83,7 @@ public class ImageSaver implements Runnable {
         Cursor cursor = searchImageFromPublic(context, subDir, fileName);
         if (cursor != null && cursor.moveToFirst()) {
             try {
-                int id = cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Media._ID));                     // uri的id，用于获取图片
+                int id = cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Media._ID));  // uri的id，用于获取图片
                 Uri uri = Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "" + id);
                 Uri contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
                 if (uri != null) {
